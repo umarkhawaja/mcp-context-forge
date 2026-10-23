@@ -134,6 +134,36 @@ export const exportServerConfig = async function (serverId, configType) {
 };
 
 /**
+ * Build an MCP client OAuth block for an OAuth-enabled server.
+ *
+ * Returns null when the server has no OAuth, no authorization server, or the
+ * gateway has no public client ID configured (MCP_CLIENT_OAUTH_CLIENT_ID):
+ * callers then fall back to a static bearer header.
+ * @param {Object} server - Server object from API (camelCase fields)
+ * @param {string} serverUrl - Public URL of the server's MCP endpoint
+ * @returns {Object|null} - OAuth block, or null
+ */
+export const buildOAuthBlock = function (server, serverUrl) {
+  const oauthConfig = server.oauthConfig || {};
+  const issuer = (oauthConfig.authorization_servers || [])[0];
+  const clientSettings = window.MCP_CLIENT_OAUTH || {};
+  if (!server.oauthEnabled || !issuer || !clientSettings.client_id) {
+    return null;
+  }
+
+  const scopeTemplate =
+    clientSettings.scope_template ||
+    "{server_url}/access_as_user offline_access";
+  return {
+    clientId: clientSettings.client_id,
+    callbackPort: clientSettings.callback_port || 33418,
+    // Entra serves metadata only at the OIDC path; the RFC 8414 path returns 404.
+    authServerMetadataUrl: `${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`,
+    scopes: scopeTemplate.split("{server_url}").join(serverUrl),
+  };
+};
+
+/**
  * Generate configuration object based on server and type
  * @param {Object} server - Server object from API
  * @param {string} configType - Configuration type
@@ -168,18 +198,40 @@ export const generateConfig = function (server, configType) {
         },
       };
 
-    case "http":
+    case "http": {
+      const oauth = buildOAuthBlock(
+        server,
+        `${baseUrl}/servers/${server.id}/mcp`
+      );
       return {
         servers: {
           [cleanServerName]: {
             type: "streamable-http",
             url: `${baseUrl}/servers/${server.id}/mcp/`,
-            headers: {
-              Authorization: "Bearer your-token-here",
-            },
+            ...(oauth
+              ? { oauth }
+              : { headers: { Authorization: "Bearer your-token-here" } }),
           },
         },
       };
+    }
+
+    case "claude": {
+      // No trailing slash: the URL must equal the Entra identifier URI the scope is built from.
+      const serverUrl = `${baseUrl}/servers/${server.id}/mcp`;
+      const oauth = buildOAuthBlock(server, serverUrl);
+      return {
+        mcpServers: {
+          [cleanServerName]: {
+            type: "http",
+            url: serverUrl,
+            ...(oauth
+              ? { oauth }
+              : { headers: { Authorization: "Bearer your-token-here" } }),
+          },
+        },
+      };
+    }
 
     default:
       throw new Error(`Unknown config type: ${configType}`);
@@ -196,12 +248,22 @@ export const showConfigDisplayModal = function (server, configType, config) {
   const descriptions = {
     sse: "Configuration for LangChain, LlamaIndex, and other SSE-based frameworks",
     http: "Configuration for REST clients and HTTP-based MCP integrations",
+    claude: "Claude Code .mcp.json configuration",
   };
 
   const usageInstructions = {
     sse: "Use with MCP client libraries that support Server-Sent Events transport",
     http: "Use with HTTP clients or REST API wrappers for MCP protocol",
+    claude:
+      "Commit as .mcp.json, or run `claude mcp add-json`. Claude Code signs in with OAuth on first use.",
   };
+
+  const serverEntry =
+    Object.values(config.mcpServers || config.servers || {})[0] || {};
+  if (server.oauthEnabled && !serverEntry.oauth) {
+    usageInstructions[configType] +=
+      " This server has OAuth enabled, but MCP_CLIENT_OAUTH_CLIENT_ID is not set, so a bearer token placeholder is shown.";
+  }
 
   // Update modal content
   const descriptionEl = safeGetElement("config-description");
@@ -244,7 +306,10 @@ export const copyConfigToClipboard = async function () {
       showSuccessMessage("Configuration copied to clipboard!");
       return;
     } catch (error) {
-      console.error("Clipboard API failed, trying execCommand fallback:", error);
+      console.error(
+        "Clipboard API failed, trying execCommand fallback:",
+        error
+      );
     }
   }
 

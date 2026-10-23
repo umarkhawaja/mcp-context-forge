@@ -390,6 +390,12 @@ mcpContextForge:
     MCPGATEWAY_UI_HIDE_HEADER_ITEMS: ""      # CSV/JSON list of header items to hide (e.g. logout,team_selector)
     MCPGATEWAY_UI_HIDE_SECTIONS_ADMIN: ""    # CSV/JSON list of UI sections to hide for admin users (empty = admins see all)
     MCPGATEWAY_UI_HIDE_HEADER_ITEMS_ADMIN: "" # CSV/JSON list of header items to hide for admin users
+    MCP_CLIENT_OAUTH_CLIENT_ID: ""         # public client ID for "Export config" OAuth blocks (not a secret)
+    MCP_CLIENT_OAUTH_CALLBACK_PORT: "33418" # loopback port; must match the client app redirect URI
+
+    # ─ SSO team auto-creation (non-secret) ─
+    SSO_AUTO_CREATE_TEAMS: "false"         # create a team per matching IdP group/role claim on sign-in
+    SSO_AUTO_TEAM_GROUP_PREFIXES: ""       # CSV/JSON list of claim prefixes, e.g. "CF-Team-"; empty disables
 
     # ─ Feature Flags (disabled by default for production) ─
     TOOLOPS_ENABLED: "false"            # enable ToolOps feature
@@ -959,8 +965,6 @@ mcpContextForge:
     SSO_ENTRA_ENABLED: "false"
     SSO_GENERIC_ENABLED: "false"
     SSO_ADFS_ENABLED: "false"
-    SSO_AUTO_CREATE_TEAMS: "false"         # create a team per matching IdP group/role claim on sign-in
-    SSO_AUTO_TEAM_GROUP_PREFIXES: ""       # CSV/JSON list of claim prefixes, e.g. "CF-Team-"; empty disables
     # See .env.example for full SSO_*_CLIENT_ID, SSO_*_CLIENT_SECRET, etc.
 
     # ─ Default Role Configuration ─

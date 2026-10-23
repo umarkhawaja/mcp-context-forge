@@ -11809,6 +11809,22 @@ class="fixed z-40 inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-ce
                     </div>
                   </div>
                 </button>
+
+                <button
+                  id="claude-config-btn"
+                  data-action-click="generateAndShowConfig" data-arg0="claude"
+                  class="w-full flex items-center p-4 text-left border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <span class="text-2xl mr-3">🤖</span>
+                  <div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100">
+                      Claude Code (.mcp.json)
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                      Uses OAuth sign-in when the server has OAuth enabled
+                    </div>
+                  </div>
+                </button>
               </div>
             </div>
             <div
@@ -12084,6 +12100,7 @@ class="fixed z-40 inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-ce
 
       window.ROOT_PATH = {{ root_path | tojson }};
       window.ALLOW_PUBLIC_VISIBILITY = {{ allow_public_visibility | tojson }};
+      window.MCP_CLIENT_OAUTH = {{ mcp_client_oauth | default({}) | tojson }};
       window.GATEWAY_TOOL_NAME_SEPARATOR = {{ gateway_tool_name_separator | tojson }};
       window.MAX_NAME_LENGTH = {{ max_name_length | tojson }};
       window.USER_TEAMS = {{ user_teams | default([]) | tojson }};

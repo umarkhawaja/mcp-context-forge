@@ -4275,6 +4275,11 @@ async def admin_ui(
             "user_teams": user_teams,
             "mcpgateway_ui_tool_test_timeout": settings.mcpgateway_ui_tool_test_timeout,
             "allow_public_visibility": settings.allow_public_visibility,
+            "mcp_client_oauth": {
+                "client_id": settings.mcp_client_oauth_client_id,
+                "callback_port": settings.mcp_client_oauth_callback_port,
+                "scope_template": settings.mcp_client_oauth_scope_template,
+            },
             "auth_header_name": settings.auth_header_name,
             "selected_team_id": selected_team_id,
             "admin_viewing_non_member_team": admin_viewing_non_member_team,

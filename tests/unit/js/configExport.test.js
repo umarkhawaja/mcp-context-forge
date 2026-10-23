@@ -17,6 +17,7 @@ import {
   downloadConfig,
   goBackToSelection,
   generateConfig,
+  buildOAuthBlock,
 } from "../../../mcpgateway/admin_ui/configExport.js";
 import { openModal, closeModal } from "../../../mcpgateway/admin_ui/modals.js";
 import {
@@ -34,7 +35,9 @@ vi.mock("../../../mcpgateway/admin_ui/modals.js", () => ({
 
 vi.mock("../../../mcpgateway/admin_ui/utils.js", () => ({
   fetchWithTimeout: vi.fn(),
-  handleFetchError: vi.fn((error, context) => `Error ${context}: ${error.message}`),
+  handleFetchError: vi.fn(
+    (error, context) => `Error ${context}: ${error.message}`
+  ),
   safeGetElement: vi.fn((id) => document.getElementById(id)),
   showErrorMessage: vi.fn(),
   showSuccessMessage: vi.fn(),
@@ -64,7 +67,9 @@ describe("generateAndShowConfig", () => {
   beforeEach(() => {
     window.ROOT_PATH = "";
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
   });
 
   test("fetches server details and generates sse config", async () => {
@@ -78,7 +83,8 @@ describe("generateAndShowConfig", () => {
       json: async () => mockServer,
     });
 
-    const { showConfigSelectionModal } = await import("../../../mcpgateway/admin_ui/configExport.js");
+    const { showConfigSelectionModal } =
+      await import("../../../mcpgateway/admin_ui/configExport.js");
     showConfigSelectionModal("server-456", "SSE Server");
 
     await generateAndShowConfig("sse");
@@ -99,7 +105,8 @@ describe("generateAndShowConfig", () => {
       json: async () => mockServer,
     });
 
-    const { showConfigSelectionModal } = await import("../../../mcpgateway/admin_ui/configExport.js");
+    const { showConfigSelectionModal } =
+      await import("../../../mcpgateway/admin_ui/configExport.js");
     showConfigSelectionModal("server-789", "HTTP Server");
 
     await generateAndShowConfig("http");
@@ -117,7 +124,8 @@ describe("generateAndShowConfig", () => {
       statusText: "Not Found",
     });
 
-    const { showConfigSelectionModal } = await import("../../../mcpgateway/admin_ui/configExport.js");
+    const { showConfigSelectionModal } =
+      await import("../../../mcpgateway/admin_ui/configExport.js");
     showConfigSelectionModal("server-404", "Missing Server");
 
     await generateAndShowConfig("sse");
@@ -131,7 +139,8 @@ describe("generateAndShowConfig", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     fetchWithTimeout.mockRejectedValue(new Error("Network failure"));
 
-    const { showConfigSelectionModal } = await import("../../../mcpgateway/admin_ui/configExport.js");
+    const { showConfigSelectionModal } =
+      await import("../../../mcpgateway/admin_ui/configExport.js");
     showConfigSelectionModal("server-net", "Network Server");
 
     await generateAndShowConfig("sse");
@@ -326,12 +335,16 @@ describe("copyConfigToClipboard", () => {
     contentEl.value = '{"test": "config"}';
     document.body.appendChild(contentEl);
 
-    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    const clipboardSpy = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockResolvedValue();
 
     await copyConfigToClipboard();
 
     expect(clipboardSpy).toHaveBeenCalledWith('{"test": "config"}');
-    expect(showSuccessMessage).toHaveBeenCalledWith("Configuration copied to clipboard!");
+    expect(showSuccessMessage).toHaveBeenCalledWith(
+      "Configuration copied to clipboard!"
+    );
 
     clipboardSpy.mockRestore();
   });
@@ -351,9 +364,9 @@ describe("copyConfigToClipboard", () => {
     document.body.appendChild(contentEl);
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
-      new Error("Clipboard access denied")
-    );
+    const clipboardSpy = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockRejectedValue(new Error("Clipboard access denied"));
 
     await copyConfigToClipboard();
 
@@ -369,9 +382,9 @@ describe("copyConfigToClipboard", () => {
 
   test("shows manual copy message when both clipboard API and execCommand fail", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
-      new Error("Denied")
-    );
+    const clipboardSpy = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockRejectedValue(new Error("Denied"));
 
     const contentEl = document.createElement("textarea");
     contentEl.id = "config-content";
@@ -381,7 +394,9 @@ describe("copyConfigToClipboard", () => {
     // execCommand returns false in JSDOM (copy not implemented)
     await copyConfigToClipboard();
 
-    expect(showErrorMessage).toHaveBeenCalledWith("Please copy the selected text manually (Ctrl+C)");
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      "Please copy the selected text manually (Ctrl+C)"
+    );
 
     clipboardSpy.mockRestore();
     errorSpy.mockRestore();
@@ -396,8 +411,12 @@ describe("downloadConfig", () => {
   let revokeObjectURLSpy;
 
   beforeEach(() => {
-    createObjectURLSpy = vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:mock-url");
-    revokeObjectURLSpy = vi.spyOn(window.URL, "revokeObjectURL").mockImplementation(() => {});
+    createObjectURLSpy = vi
+      .spyOn(window.URL, "createObjectURL")
+      .mockReturnValue("blob:mock-url");
+    revokeObjectURLSpy = vi
+      .spyOn(window.URL, "revokeObjectURL")
+      .mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -455,7 +474,9 @@ describe("downloadConfig", () => {
 
     downloadConfig();
 
-    expect(showErrorMessage).toHaveBeenCalledWith("Failed to download configuration");
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      "Failed to download configuration"
+    );
     errorSpy.mockRestore();
   });
 
@@ -469,12 +490,14 @@ describe("downloadConfig", () => {
     await exportServerConfig("sse-dl", "sse");
 
     let downloadedFilename = null;
-    const appendChildSpy = vi.spyOn(document.body, "appendChild").mockImplementation((el) => {
-      if (el.tagName === "A") {
-        downloadedFilename = el.download;
-      }
-      return el;
-    });
+    const appendChildSpy = vi
+      .spyOn(document.body, "appendChild")
+      .mockImplementation((el) => {
+        if (el.tagName === "A") {
+          downloadedFilename = el.download;
+        }
+        return el;
+      });
 
     downloadConfig();
 
@@ -501,5 +524,127 @@ describe("goBackToSelection", () => {
 
     expect(closeModal).toHaveBeenCalledTimes(3);
     expect(openModal).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OAuth-aware export (MCP_CLIENT_OAUTH_CLIENT_ID)
+// ---------------------------------------------------------------------------
+
+describe("OAuth export", () => {
+  const ISSUER = "https://login.microsoftonline.com/tenant-1/v2.0";
+  const oauthServer = {
+    id: "srv-1",
+    name: "AWS Knowledge",
+    oauthEnabled: true,
+    oauthConfig: { authorization_servers: [ISSUER], resource: "app-1" },
+  };
+
+  beforeEach(() => {
+    window.MCP_CLIENT_OAUTH = {
+      client_id: "cli-client-1",
+      callback_port: 33418,
+      scope_template: "{server_url}/access_as_user offline_access",
+    };
+  });
+
+  afterEach(() => {
+    delete window.MCP_CLIENT_OAUTH;
+  });
+
+  test("claude export carries an Entra OAuth block for an OAuth server", () => {
+    const config = generateConfig(oauthServer, "claude");
+    const entry = config.mcpServers["aws-knowledge"];
+    const url = `${window.location.protocol}//${window.location.host}/servers/srv-1/mcp`;
+
+    expect(entry.type).toBe("http");
+    expect(entry.url).toBe(url);
+    expect(entry.headers).toBeUndefined();
+    expect(entry.oauth).toEqual({
+      clientId: "cli-client-1",
+      callbackPort: 33418,
+      authServerMetadataUrl: `${ISSUER}/.well-known/openid-configuration`,
+      scopes: `${url}/access_as_user offline_access`,
+    });
+  });
+
+  test("http export swaps the bearer placeholder for OAuth", () => {
+    const entry = generateConfig(oauthServer, "http").servers["aws-knowledge"];
+
+    expect(entry.type).toBe("streamable-http");
+    expect(entry.oauth.clientId).toBe("cli-client-1");
+    expect(entry.headers).toBeUndefined();
+  });
+
+  test("sse export is unchanged and keeps the bearer placeholder", () => {
+    const entry = generateConfig(oauthServer, "sse").servers["aws-knowledge"];
+
+    expect(entry.oauth).toBeUndefined();
+    expect(entry.headers).toEqual({ Authorization: "Bearer your-token-here" });
+  });
+
+  test("falls back to the bearer placeholder without a configured client ID", () => {
+    window.MCP_CLIENT_OAUTH = {};
+    const entry = generateConfig(oauthServer, "claude").mcpServers[
+      "aws-knowledge"
+    ];
+
+    expect(entry.oauth).toBeUndefined();
+    expect(entry.headers).toEqual({ Authorization: "Bearer your-token-here" });
+  });
+
+  test("falls back for a server without OAuth enabled", () => {
+    const entry = generateConfig(
+      { ...oauthServer, oauthEnabled: false },
+      "claude"
+    ).mcpServers["aws-knowledge"];
+
+    expect(entry.oauth).toBeUndefined();
+    expect(entry.headers).toBeDefined();
+  });
+
+  test("falls back when the OAuth server has no authorization server", () => {
+    expect(
+      buildOAuthBlock(
+        { ...oauthServer, oauthConfig: {} },
+        "https://gw/servers/srv-1/mcp"
+      )
+    ).toBeNull();
+  });
+
+  test("strips a trailing slash from the issuer", () => {
+    const block = buildOAuthBlock(
+      {
+        ...oauthServer,
+        oauthConfig: { authorization_servers: [`${ISSUER}/`] },
+      },
+      "https://gw/servers/srv-1/mcp"
+    );
+
+    expect(block.authServerMetadataUrl).toBe(
+      `${ISSUER}/.well-known/openid-configuration`
+    );
+  });
+
+  test("expands every {server_url} placeholder in a custom scope template", () => {
+    window.MCP_CLIENT_OAUTH.scope_template = "{server_url}/a {server_url}/b";
+    const block = buildOAuthBlock(oauthServer, "https://gw/servers/srv-1/mcp");
+
+    expect(block.scopes).toBe(
+      "https://gw/servers/srv-1/mcp/a https://gw/servers/srv-1/mcp/b"
+    );
+  });
+
+  test("display modal notes the fallback when OAuth is on but no client ID is set", () => {
+    document.body.innerHTML =
+      '<p id="config-usage"></p><textarea id="config-content"></textarea>';
+    window.MCP_CLIENT_OAUTH = {};
+    const config = generateConfig(oauthServer, "claude");
+
+    showConfigDisplayModal(oauthServer, "claude", config);
+
+    expect(document.getElementById("config-usage").textContent).toContain(
+      "MCP_CLIENT_OAUTH_CLIENT_ID is not set"
+    );
   });
 });

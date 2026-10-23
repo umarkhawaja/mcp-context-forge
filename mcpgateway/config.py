@@ -543,6 +543,15 @@ class Settings(BaseSettings):
         description="Claim value suffix that grants team owner instead of member, e.g. CF-Team-Eng-Owners -> owner of the CF-Team-Eng team",
     )
     sso_auto_team_visibility: Literal["private", "public"] = Field(default="private", description="Visibility of teams created by SSO_AUTO_CREATE_TEAMS")
+    mcp_client_oauth_client_id: Optional[str] = Field(
+        default=None,
+        description=("Public OAuth client ID that MCP clients use to sign in to OAuth-enabled virtual servers. The Admin UI puts it in exported client configs. A public client ID, not a secret."),
+    )
+    mcp_client_oauth_callback_port: int = Field(default=33418, ge=1, le=65535, description="Loopback callback port in exported MCP client OAuth configs")
+    mcp_client_oauth_scope_template: str = Field(
+        default="{server_url}/access_as_user offline_access",
+        description="Scopes in exported MCP client OAuth configs; {server_url} expands to the virtual server URL (Entra needs it as an identifier URI)",
+    )
     sso_trusted_domains: Annotated[list[str], NoDecode] = Field(default_factory=list, description="Trusted email domains (CSV or JSON list)")
     sso_preserve_admin_auth: bool = Field(default=True, description="Preserve local admin authentication when SSO is enabled")
     sso_allow_provider_linking: bool = Field(
@@ -1274,6 +1283,25 @@ class Settings(BaseSettings):
         default=None,
         description="Trusted deployment base or full frontend root ending in /app for browser-facing UI links. Falls back to APP_DOMAIN plus APP_ROOT_PATH when unset.",
     )
+
+    @field_validator("mcp_client_oauth_client_id", mode="before")
+    @classmethod
+    def normalize_mcp_client_oauth_client_id(cls, value: object) -> object:
+        """Treat a blank client ID (the Helm chart default) as unset.
+
+        Args:
+            value: Raw configured client ID.
+
+        Returns:
+            object: ``None`` for blank strings, the stripped string otherwise, or the original value.
+
+        Examples:
+            >>> Settings.normalize_mcp_client_oauth_client_id("  "), Settings.normalize_mcp_client_oauth_client_id(" cli-1 ")
+            (None, 'cli-1')
+        """
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
     @field_validator("ui_base_url", mode="before")
     @classmethod
