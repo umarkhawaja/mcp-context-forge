@@ -7327,6 +7327,9 @@ class TeamResponse(BaseModel):
     created_at: datetime = Field(..., description="Team creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     is_active: bool = Field(..., description="Whether the team is active")
+    source: Optional[str] = Field(None, description="Team origin: 'sso' when created by SSO_AUTO_CREATE_TEAMS, otherwise null")
+    external_provider: Optional[str] = Field(None, description="SSO provider ID that manages this team (source='sso' only)")
+    external_id: Optional[str] = Field(None, description="IdP claim value bound to this team, lowercased (source='sso' only)")
 
 
 class SeededMemberResponse(BaseModel):

@@ -21,6 +21,7 @@ import asyncio
 import base64
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 # Third-Party
@@ -960,6 +961,95 @@ class TeamManagementService:
             self.db.rollback()
             logger.error("Failed to create team '%s': %s", name, e)
             raise
+
+    async def get_or_create_external_team(self, provider_id: str, external_id: str, name: str, created_by: str, visibility: str = "private") -> Optional[EmailTeam]:
+        """Return the active team bound to an IdP claim value, creating it on first use.
+
+        Unlike :meth:`create_team`, the ``created_by`` identity is recorded only for
+        audit and is not made an owner: membership of an SSO-sourced team comes
+        exclusively from IdP claims. A name collision with a manually created team
+        never binds that team to the IdP; the method logs and returns ``None``.
+
+        Args:
+            provider_id: SSO provider ID, e.g. ``entra``.
+            external_id: Claim value that identifies the team at the IdP.
+            name: Display name for a newly created team.
+            created_by: Existing user recorded as creator (not granted membership).
+            visibility: ``private`` or ``public``.
+
+        Returns:
+            The bound team, or ``None`` when the name is taken by an unrelated team.
+
+        Raises:
+            PublicValidationError: If ``visibility`` is not ``private`` or ``public``.
+
+        Examples:
+            >>> import asyncio
+            >>> from unittest.mock import Mock
+            >>> service = TeamManagementService(Mock())
+            >>> asyncio.iscoroutinefunction(service.get_or_create_external_team)
+            True
+        """
+        if visibility not in ("private", "public"):
+            raise PublicValidationError("Invalid visibility. Must be one of: private, public")
+
+        # Claim values are IdP-controlled; apply the same rules a user-created team name must pass.
+        if len(name) > 255 or len(external_id) > 255 or not re.match(settings.validation_name_pattern, name):
+            logger.warning("SSO auto-team skipped: %s claim '%s' is not a valid team name", provider_id, SecurityValidator.sanitize_log_message(external_id[:100]))
+            return None
+
+        existing = self.db.query(EmailTeam).filter(EmailTeam.external_provider == provider_id, EmailTeam.external_id == external_id).first()
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                existing.updated_at = utc_now()
+                self.db.commit()
+                logger.info("Reactivated SSO team %s for %s claim '%s'", existing.id, provider_id, SecurityValidator.sanitize_log_message(external_id))
+            return existing
+
+        slug = slugify(name)
+        if self.db.query(EmailTeam).filter(EmailTeam.slug == slug).first():
+            logger.warning(
+                "SSO auto-team skipped: team slug '%s' for %s claim '%s' belongs to a team not bound to that claim",
+                slug,
+                provider_id,
+                SecurityValidator.sanitize_log_message(external_id),
+            )
+            return None
+
+        team = EmailTeam(
+            name=name,
+            description=f"Managed by {provider_id} claim '{external_id}'",
+            created_by=created_by,
+            is_personal=False,
+            visibility=visibility,
+            is_active=True,
+            source="sso",
+            external_provider=provider_id,
+            external_id=external_id,
+        )
+        self.db.add(team)
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # A concurrent first sign-in created the same team; the partial unique index settles the race.
+            self.db.rollback()
+            winner = self.db.query(EmailTeam).filter(EmailTeam.external_provider == provider_id, EmailTeam.external_id == external_id).first()
+            if winner is None:
+                logger.warning("SSO auto-team create failed for %s claim '%s' (slug conflict)", provider_id, SecurityValidator.sanitize_log_message(external_id))
+            return winner
+        except Exception:
+            # Leave the sign-in session usable for the membership grants that follow.
+            self.db.rollback()
+            raise
+
+        try:
+            await admin_stats_cache.invalidate_teams()
+        except Exception as cache_error:
+            logger.debug("Failed to invalidate cache on SSO team create: %s", cache_error)
+
+        logger.info("Created SSO team %s '%s' for %s claim '%s'", team.id, SecurityValidator.sanitize_log_message(name), provider_id, SecurityValidator.sanitize_log_message(external_id))
+        return team
 
     async def get_team_by_id(self, team_id: str) -> Optional[EmailTeam]:
         """Get a team by ID.

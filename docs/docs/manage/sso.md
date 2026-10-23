@@ -755,6 +755,41 @@ Configure automatic team assignment based on SSO provider attributes:
 }
 ```
 
+### Automatic Team Creation from IdP Groups
+
+With `SSO_AUTO_CREATE_TEAMS=true`, ContextForge creates a team the first time a user signs in with a group or role claim value that starts with one of `SSO_AUTO_TEAM_GROUP_PREFIXES`, and adds that user to it. The identity provider stays the only place where membership is managed.
+
+```bash
+SSO_AUTO_CREATE_TEAMS=true
+SSO_AUTO_TEAM_GROUP_PREFIXES=CF-Team-        # CSV or JSON list; empty disables the feature
+SSO_AUTO_TEAM_OWNER_SUFFIX=-Owners           # optional, this is the default
+SSO_AUTO_TEAM_VISIBILITY=private             # private (default) or public
+```
+
+| Claim value | Result |
+|-------------|--------|
+| `CF-Team-Eng` | Team `CF-Team-Eng` is created if missing; the user joins as **member** |
+| `CF-Team-Eng-Owners` | The user joins team `CF-Team-Eng` as **owner** |
+| `CF-Team-Eng` and `CF-Team-Eng-Owners` | The user joins as **owner** |
+| `Finance` | Ignored (no matching prefix) |
+
+Behaviour:
+
+- **Reconciled at every sign-in.** Memberships granted this way use `grant_source="sso"`. When the claim disappears, the next sign-in removes the membership. Manually added members are never touched.
+- **The team is kept** when its last member leaves, so gateways, tools, and tokens it owns are not stranded. A team that was deactivated is reactivated on its next matching sign-in.
+- **Bound by provider and claim value, not by name.** Each team records `source="sso"`, `external_provider`, and the lowercased `external_id`. The same claim value from a different provider does not join the team. If a manually created team already uses the name, it is never bound to the claim: the claim is skipped and a warning is logged.
+- **Creator.** The team records `PLATFORM_ADMIN_EMAIL` as `created_by` for audit only. That account is not added as a member.
+- **Explicit mappings win.** A claim value with an entry in the provider `team_mapping` uses that entry instead.
+- **`ALLOW_TEAM_CREATION` does not apply.** It governs user-initiated team creation; auto-created teams are a platform policy enabled by the operator.
+
+!!! warning "Microsoft Entra ID group claims are object IDs"
+    Entra emits security groups as object IDs (GUIDs) in the `groups` claim, which never match a name prefix. Use one of:
+
+    - **App roles** (recommended): define app roles such as `CF-Team-Eng` on the app registration and assign groups to them. Role values arrive in the `roles` claim, which ContextForge reads together with `groups`.
+    - **Group display names**: set the groups claim to *Groups assigned to the application* and emit `cloud_displayname`. Display names are only emitted for groups assigned to the app.
+
+    Keep using an explicit `team_mapping` keyed by object ID for groups you cannot rename or expose as names.
+
 ## API Reference
 
 ### Public Endpoints

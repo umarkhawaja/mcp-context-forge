@@ -959,6 +959,8 @@ mcpContextForge:
     SSO_ENTRA_ENABLED: "false"
     SSO_GENERIC_ENABLED: "false"
     SSO_ADFS_ENABLED: "false"
+    SSO_AUTO_CREATE_TEAMS: "false"         # create a team per matching IdP group/role claim on sign-in
+    SSO_AUTO_TEAM_GROUP_PREFIXES: ""       # CSV/JSON list of claim prefixes, e.g. "CF-Team-"; empty disables
     # See .env.example for full SSO_*_CLIENT_ID, SSO_*_CLIENT_SECRET, etc.
 
     # ─ Default Role Configuration ─

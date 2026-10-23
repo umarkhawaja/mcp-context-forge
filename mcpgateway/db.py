@@ -1992,6 +1992,11 @@ class EmailTeam(Base):
     visibility: Mapped[str] = mapped_column(String(20), default="public", nullable=False)
     max_members: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Origin: "sso" when SSO_AUTO_CREATE_TEAMS created the team from an IdP claim value
+    source: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    external_provider: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
+    external_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
@@ -2003,8 +2008,19 @@ class EmailTeam(Base):
     api_tokens: Mapped[List["EmailApiToken"]] = relationship("EmailApiToken", back_populates="team", cascade="all, delete-orphan")
     creator: Mapped["EmailUser"] = relationship("EmailUser", foreign_keys=[created_by])
 
-    # Index for search and pagination performance
-    __table_args__ = (Index("ix_email_teams_name_id", "name", "id"),)
+    __table_args__ = (
+        # Search and pagination performance
+        Index("ix_email_teams_name_id", "name", "id"),
+        # One team per IdP claim value; concurrent first sign-ins race on this constraint, not on name
+        Index(
+            "uq_email_teams_external",
+            "external_provider",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL"),
+            sqlite_where=text("external_id IS NOT NULL"),
+        ),
+    )
 
     def __repr__(self) -> str:
         """String representation of the team.

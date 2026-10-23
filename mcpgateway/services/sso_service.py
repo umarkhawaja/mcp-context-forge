@@ -594,6 +594,97 @@ class SSOService:
 
         return None, "member"
 
+    @staticmethod
+    def _auto_team_target(claim_value: str) -> Optional[Tuple[str, str]]:
+        """Resolve a claim value to its auto-team key and role, or ``None`` when it does not qualify.
+
+        The owner suffix maps ``CF-Team-Eng-Owners`` onto the ``CF-Team-Eng`` team as owner,
+        so both claims share one team. Prefix and suffix matching are case-insensitive.
+
+        Args:
+            claim_value: A group or role value from the identity claims.
+
+        Returns:
+            ``(team_key, role)`` with role ``owner`` or ``member``, or ``None``.
+
+        Examples:
+            >>> from unittest.mock import patch
+            >>> with patch.object(settings, "sso_auto_team_group_prefixes", ["CF-Team-"]), patch.object(settings, "sso_auto_team_owner_suffix", "-Owners"):
+            ...     SSOService._auto_team_target("CF-Team-Eng"), SSOService._auto_team_target("cf-team-eng-owners"), SSOService._auto_team_target("Other")
+            (('CF-Team-Eng', 'member'), ('cf-team-eng', 'owner'), None)
+        """
+        lowered = claim_value.lower()
+        if not any(prefix and lowered.startswith(prefix.lower()) for prefix in settings.sso_auto_team_group_prefixes):
+            return None
+        suffix = settings.sso_auto_team_owner_suffix
+        if suffix and lowered.endswith(suffix.lower()) and len(claim_value) > len(suffix):
+            base = claim_value[: -len(suffix)]
+            if any(prefix and base.lower().startswith(prefix.lower()) and len(base) > len(prefix) for prefix in settings.sso_auto_team_group_prefixes):
+                return base, "owner"
+            return None
+        if any(prefix and lowered == prefix.lower() for prefix in settings.sso_auto_team_group_prefixes):
+            return None
+        return claim_value, "member"
+
+    async def _auto_team_mapping(self, provider: SSOProvider, groups: List[str], explicit_mapping: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+        """Build team_mapping entries for claim values handled by SSO_AUTO_CREATE_TEAMS.
+
+        Creates the team for a qualifying claim value on first use. Claim values that
+        already have an explicit ``team_mapping`` entry are left to that entry.
+
+        Args:
+            provider: SSO provider the claims came from.
+            groups: Group and role claim values for the signing-in user.
+            explicit_mapping: The provider's configured ``team_mapping``.
+
+        Returns:
+            Mapping of claim value to ``{"team_id", "role"}`` for qualifying values.
+        """
+        if not settings.sso_auto_create_teams or not settings.sso_auto_team_group_prefixes:
+            return {}
+
+        explicit_keys = {key.strip().lower() for key in explicit_mapping if isinstance(key, str)}
+        targets: Dict[str, Tuple[str, str]] = {}
+        for claim_value in groups:
+            if claim_value.lower() in explicit_keys:
+                continue
+            resolved = self._auto_team_target(claim_value)
+            if resolved:
+                targets[claim_value] = resolved
+        # A member claim and an owner claim for the same team: grant only owner, since the
+        # grant loop keeps the first role it adds and would otherwise downgrade at random.
+        owner_keys = {team_key.lower() for team_key, role in targets.values() if role == "owner"}
+        targets = {claim: (key, role) for claim, (key, role) in targets.items() if role == "owner" or key.lower() not in owner_keys}
+        if not targets:
+            return {}
+
+        # First-Party
+        from mcpgateway.services.team_management_service import TeamManagementService  # pylint: disable=import-outside-toplevel
+
+        team_service = TeamManagementService(self.db)
+        created_by = settings.platform_admin_email
+        entries: Dict[str, Dict[str, str]] = {}
+        teams_by_key: Dict[str, Optional[str]] = {}
+        for claim_value, (team_key, role) in targets.items():
+            normalized_key = team_key.lower()
+            if normalized_key not in teams_by_key:
+                try:
+                    team = await team_service.get_or_create_external_team(
+                        provider_id=provider.id,
+                        external_id=normalized_key,
+                        name=team_key,
+                        created_by=created_by,
+                        visibility=settings.sso_auto_team_visibility,
+                    )
+                except Exception as exc:
+                    logger.error("SSO auto-team failed for provider %s claim '%s': %s", provider.id, SecurityValidator.sanitize_log_message(claim_value), exc, exc_info=True)
+                    team = None
+                teams_by_key[normalized_key] = str(team.id) if team else None
+            team_id = teams_by_key[normalized_key]
+            if team_id:
+                entries[claim_value] = {"team_id": team_id, "role": role}
+        return entries
+
     async def _apply_team_mapping(self, user_email: str, user_info: Dict[str, Any], provider: Optional[SSOProvider]) -> None:
         """Apply provider team mappings based on SSO group claims.
 
@@ -611,10 +702,6 @@ class SSOService:
         if not provider:
             return
 
-        mapping = getattr(provider, "team_mapping", None)
-        if not isinstance(mapping, dict) or not mapping:
-            return
-
         groups_raw = user_info.get("groups", [])
         if isinstance(groups_raw, str):
             groups = [groups_raw]
@@ -624,6 +711,16 @@ class SSOService:
             groups = []
 
         normalized_groups = {group.lower() for group in groups}
+
+        configured_mapping = getattr(provider, "team_mapping", None)
+        mapping: Dict[str, Any] = dict(configured_mapping) if isinstance(configured_mapping, dict) else {}
+        auto_teams_enabled = bool(settings.sso_auto_create_teams and settings.sso_auto_team_group_prefixes)
+        # With auto-teams on, an empty mapping still means "revoke stale SSO memberships":
+        # it is how a user who lost their last qualifying claim gets removed.
+        if not mapping and not auto_teams_enabled:
+            return
+        for source_group, target in (await self._auto_team_mapping(provider, groups, mapping)).items():
+            mapping.setdefault(source_group, target)
 
         # First-Party
         from mcpgateway.services.team_management_service import (  # pylint: disable=import-outside-toplevel

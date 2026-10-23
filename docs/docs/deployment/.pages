@@ -12,6 +12,7 @@ nav:
   - google-cloud-run.md
   - ibm-code-engine.md
   - aws.md
+  - entra-id-production-guide.md
   - azure.md
   - fly-io.md
   - proxy-auth.md

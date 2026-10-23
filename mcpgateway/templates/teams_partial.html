@@ -35,6 +35,10 @@
                 <span
                     class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">{{
                     team.visibility|upper }}</span>
+                {% if team.source == 'sso' %}
+                <span class="sso-managed-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300"
+                    title="Membership is synced from {{ team.external_provider|escape }} claim '{{ team.external_id|escape }}' at each sign-in. Manage members in the identity provider.">SSO: {{ team.external_provider|upper|escape }}</span>
+                {% endif %}
                 <span class="text-sm text-gray-500 dark:text-gray-400">{{ team.member_count|default(0) }} members</span>
             </div>
 

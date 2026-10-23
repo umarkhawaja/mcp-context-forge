@@ -527,6 +527,22 @@ class Settings(BaseSettings):
 
     # SSO Settings
     sso_auto_create_users: bool = Field(default=True, description="Automatically create users from SSO providers")
+    sso_auto_create_teams: bool = Field(
+        default=False,
+        description=(
+            "Create a ContextForge team on sign-in for each SSO group or role claim value that matches "
+            "SSO_AUTO_TEAM_GROUP_PREFIXES, and add the user to it. Explicit provider team_mapping entries take precedence."
+        ),
+    )
+    sso_auto_team_group_prefixes: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        description="Claim value prefixes that qualify for SSO_AUTO_CREATE_TEAMS (CSV or JSON list). Empty disables auto-creation.",
+    )
+    sso_auto_team_owner_suffix: str = Field(
+        default="-Owners",
+        description="Claim value suffix that grants team owner instead of member, e.g. CF-Team-Eng-Owners -> owner of the CF-Team-Eng team",
+    )
+    sso_auto_team_visibility: Literal["private", "public"] = Field(default="private", description="Visibility of teams created by SSO_AUTO_CREATE_TEAMS")
     sso_trusted_domains: Annotated[list[str], NoDecode] = Field(default_factory=list, description="Trusted email domains (CSV or JSON list)")
     sso_preserve_admin_auth: bool = Field(default=True, description="Preserve local admin authentication when SSO is enabled")
     sso_allow_provider_linking: bool = Field(
@@ -3388,6 +3404,7 @@ Disallow: /
         "sso_entra_admin_groups",
         "sso_generic_admin_groups",
         "sso_trusted_domains",
+        "sso_auto_team_group_prefixes",
         "sso_auto_admin_domains",
         "sso_github_admin_orgs",
         "sso_google_admin_domains",

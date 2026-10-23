@@ -1310,6 +1310,26 @@ class TestTeamsRouter:
             assert result[0].role == mock_team_member.role
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("grant_source", ["sso", None])
+    async def test_list_team_members_returns_grant_source(self, mock_user_context, mock_db, mock_team_member, grant_source):
+        """grant_source distinguishes SSO-synced members from manual ones in the API response."""
+        mock_team_member.grant_source = grant_source
+        mock_user = MagicMock(spec=EmailUser)
+        mock_user.email = mock_team_member.user_email
+
+        with patch("mcpgateway.routers.teams.TeamManagementService") as MockService:
+            mock_service = AsyncMock(spec=TeamManagementService)
+            mock_service.get_user_role_in_team = AsyncMock(return_value="member")
+            mock_service.get_team_members = AsyncMock(return_value=[(mock_user, mock_team_member)])
+            MockService.return_value = mock_service
+
+            from mcpgateway.routers.teams import list_team_members
+
+            result = await list_team_members(team_id=str(uuid4()), cursor=None, limit=None, include_pagination=False, current_user=mock_user_context, db=mock_db)
+
+            assert result[0].grant_source == grant_source
+
+    @pytest.mark.asyncio
     async def test_list_team_members_access_denied(self, mock_user_context, mock_db):
         """Test listing team members without access."""
         team_id = str(uuid4())

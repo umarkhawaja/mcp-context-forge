@@ -82,6 +82,25 @@ logger = logging_service.get_logger(__name__)
 teams_router = APIRouter()
 
 
+def _str_or_none(value: Any) -> Optional[str]:
+    """Return ``value`` when it is a string, otherwise ``None``.
+
+    Team rows created before the external-source migration, and test doubles,
+    may expose these optional columns as missing or non-string values.
+
+    Args:
+        value: Candidate attribute value.
+
+    Returns:
+        The string, or ``None``.
+
+    Examples:
+        >>> _str_or_none("sso"), _str_or_none(None), _str_or_none(3)
+        ('sso', None, None)
+    """
+    return value if isinstance(value, str) else None
+
+
 # ---------------------------------------------------------------------------
 # Team CRUD Operations
 # ---------------------------------------------------------------------------
@@ -160,6 +179,9 @@ async def create_team(
             created_at=team.created_at,
             updated_at=team.updated_at,
             is_active=team.is_active,
+            source=_str_or_none(getattr(team, "source", None)),
+            external_provider=_str_or_none(getattr(team, "external_provider", None)),
+            external_id=_str_or_none(getattr(team, "external_id", None)),
             members_added=[SeededMemberResponse(email=member.email, role=member.role) for member in result.members_added],
             invitations_sent=[SeededInvitationResponse(email=invite.email, role=invite.role, invitation_id=invite.invitation_id) for invite in result.invitations_sent],
         )
@@ -307,6 +329,9 @@ async def list_teams(
                 created_at=team.created_at,
                 updated_at=team.updated_at,
                 is_active=team.is_active,
+                source=_str_or_none(getattr(team, "source", None)),
+                external_provider=_str_or_none(getattr(team, "external_provider", None)),
+                external_id=_str_or_none(getattr(team, "external_id", None)),
             )
             for team in teams_data
         ]
@@ -430,6 +455,9 @@ async def get_team(team_id: str, current_user: dict = Depends(get_current_user_w
             created_at=team_obj.created_at,
             updated_at=team_obj.updated_at,
             is_active=team_obj.is_active,
+            source=_str_or_none(getattr(team_obj, "source", None)),
+            external_provider=_str_or_none(getattr(team_obj, "external_provider", None)),
+            external_id=_str_or_none(getattr(team_obj, "external_id", None)),
         )
         db.commit()
         db.close()
@@ -504,6 +532,9 @@ async def update_team(team_id: str, request: TeamUpdateRequest, current_user: di
             created_at=team_obj.created_at,
             updated_at=team_obj.updated_at,
             is_active=team_obj.is_active,
+            source=_str_or_none(getattr(team_obj, "source", None)),
+            external_provider=_str_or_none(getattr(team_obj, "external_provider", None)),
+            external_id=_str_or_none(getattr(team_obj, "external_id", None)),
         )
         db.commit()
         db.close()
@@ -627,6 +658,7 @@ async def list_team_members(
                     joined_at=membership.joined_at,
                     invited_by=membership.invited_by,
                     is_active=membership.is_active,
+                    grant_source=_str_or_none(getattr(membership, "grant_source", None)),
                 )
             )
 
@@ -1271,6 +1303,7 @@ async def approve_join_request(
             joined_at=member.joined_at,
             invited_by=member.invited_by,
             is_active=member.is_active,
+            grant_source=_str_or_none(getattr(member, "grant_source", None)),
         )
     except JoinRequestNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
