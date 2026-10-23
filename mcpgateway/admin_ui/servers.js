@@ -1,4 +1,5 @@
 import { AppState } from "./appState.js";
+import { populateTeamSelect } from "./teamSelect.js";
 import { getCatalogUrl } from "./configExport.js";
 import { toggleViewPublic } from "./filters.js";
 import { initGatewaySelect } from "./gateways.js";
@@ -688,6 +689,8 @@ export const editServer = async function (serverId) {
       }
     }
     hiddenField.value = isInactiveCheckedBool;
+
+    populateTeamSelect("edit-server-team", server);
 
     const visibility = server.visibility
       ? server.visibility.toLowerCase()

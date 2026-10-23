@@ -44,6 +44,7 @@ from mcpgateway.db import set_custom_name_and_slug
 from mcpgateway.db import Tool as DbTool
 from mcpgateway.schemas import GatewayCreate, GatewayUpdate, ToolCreate
 from mcpgateway.services.encryption_service import get_encryption_service
+from mcpgateway.utils.error_formatter import PublicValidationError
 from mcpgateway.services.gateway_service import (
     GatewayCatalogSyncResult,
     GatewayConnectionError,
@@ -2442,6 +2443,90 @@ class TestGatewayService:
             await gateway_service.update_gateway(test_db, 1, gateway_update, user_email=None)
 
         assert mock_gateway.team_id == "new-team"
+
+    def _run_team_move_setup(self, gateway_service, mock_gateway, test_db, items):
+        """Wire a gateway with child items for a team-move update (no ownership check)."""
+        mock_gateway.team_id = "old-team"
+        mock_gateway.auth_type = "none"
+        mock_gateway.oauth_config = None
+        mock_gateway.auth_query_params = None
+        mock_gateway.slug = "test_gateway"
+        mock_gateway.tools, mock_gateway.resources, mock_gateway.prompts = items
+        test_db.execute = Mock(return_value=_make_execute_result(scalar=mock_gateway))
+        test_db.commit = Mock()
+        test_db.refresh = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = MagicMock()
+        mock_query.all.return_value = []
+        test_db.query = Mock(return_value=mock_query)
+        gateway_service._initialize_gateway = AsyncMock(side_effect=GatewayConnectionError("unreachable"))
+        gateway_service._notify_gateway_updated = AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_update_gateway_team_change_moves_inherited_items(self, gateway_service, mock_gateway, test_db):
+        """A team move must carry tools, resources and prompts that inherited the old team, so the old team loses access."""
+        tool, resource, prompt = MagicMock(spec=DbTool), MagicMock(spec=DbResource), MagicMock(spec=DbPrompt)
+        for item in (tool, resource, prompt):
+            item.team_id = "old-team"
+        self._run_team_move_setup(gateway_service, mock_gateway, test_db, ([tool], [resource], [prompt]))
+
+        mock_gateway_read = MagicMock()
+        mock_gateway_read.masked.return_value = mock_gateway_read
+        with patch("mcpgateway.services.gateway_service.GatewayRead.model_validate", return_value=mock_gateway_read):
+            await gateway_service.update_gateway(test_db, 1, GatewayUpdate(team_id="new-team"), user_email=None)
+
+        assert mock_gateway.team_id == "new-team"
+        assert (tool.team_id, resource.team_id, prompt.team_id) == ("new-team", "new-team", "new-team")
+
+    @pytest.mark.asyncio
+    async def test_update_gateway_team_change_preserves_per_item_team_overrides(self, gateway_service, mock_gateway, test_db):
+        """Items deliberately assigned to a different team keep that team when the gateway moves."""
+        inherited, overridden = MagicMock(spec=DbTool), MagicMock(spec=DbTool)
+        inherited.team_id, overridden.team_id = "old-team", "third-team"
+        self._run_team_move_setup(gateway_service, mock_gateway, test_db, ([inherited, overridden], [], []))
+
+        mock_gateway_read = MagicMock()
+        mock_gateway_read.masked.return_value = mock_gateway_read
+        with patch("mcpgateway.services.gateway_service.GatewayRead.model_validate", return_value=mock_gateway_read):
+            await gateway_service.update_gateway(test_db, 1, GatewayUpdate(team_id="new-team"), user_email=None)
+
+        assert inherited.team_id == "new-team"
+        assert overridden.team_id == "third-team", "per-item team override must not be overwritten"
+
+    @pytest.mark.asyncio
+    async def test_update_gateway_same_team_leaves_items_untouched(self, gateway_service, mock_gateway, test_db):
+        """Re-submitting the current team (every UI save does this) must not rewrite child items."""
+        tool = MagicMock(spec=DbTool)
+        tool.team_id = "third-team"
+        self._run_team_move_setup(gateway_service, mock_gateway, test_db, ([tool], [], []))
+
+        mock_gateway_read = MagicMock()
+        mock_gateway_read.masked.return_value = mock_gateway_read
+        with patch("mcpgateway.services.gateway_service.GatewayRead.model_validate", return_value=mock_gateway_read):
+            await gateway_service.update_gateway(test_db, 1, GatewayUpdate(team_id="old-team"), user_email=None)
+
+        assert tool.team_id == "third-team"
+
+    @pytest.mark.asyncio
+    async def test_update_gateway_team_change_denied_for_non_owner_moves_nothing(self, gateway_service, mock_gateway, test_db):
+        """Deny path: a caller who does not own the target team cannot move the gateway or its tools."""
+        tool = MagicMock(spec=DbTool)
+        tool.team_id = "old-team"
+        self._run_team_move_setup(gateway_service, mock_gateway, test_db, ([tool], [], []))
+        gateway_service._check_gateway_uniqueness = Mock(return_value=None)
+
+        with (
+            patch("mcpgateway.services.permission_service.PermissionService") as mock_perm,
+            patch("mcpgateway.services.gateway_service._validate_gateway_team_assignment", side_effect=PublicValidationError("User membership in team not sufficient for this update.")),
+        ):
+            # Caller owns the gateway, so the request reaches the target-team ownership rule.
+            mock_perm.return_value.check_resource_ownership = AsyncMock(return_value=True)
+            with pytest.raises(GatewayError, match="membership"):
+                await gateway_service.update_gateway(test_db, 1, GatewayUpdate(team_id="new-team"), user_email="user@example.com")
+
+        assert mock_gateway.team_id == "old-team"
+        assert tool.team_id == "old-team"
 
     @pytest.mark.asyncio
     async def test_update_gateway_visibility_preserves_per_resource_overrides(self, gateway_service, mock_gateway, test_db):

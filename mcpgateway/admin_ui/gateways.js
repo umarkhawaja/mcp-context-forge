@@ -1,4 +1,5 @@
 import { getAuthHeaders, loadAuthHeaders, updateAuthHeadersJSON } from "./auth.js";
+import { populateTeamSelect } from "./teamSelect.js";
 import { MASKED_AUTH_VALUE } from "./constants.js";
 import { closeModal, openModal } from "./modals.js";
 import { initPromptSelect } from "./prompts.js";
@@ -314,6 +315,8 @@ export const editGateway = async function (gatewayId) {
       hiddenInput.value = teamId;
       editForm.appendChild(hiddenInput);
     }
+
+    populateTeamSelect("edit-gateway-team", gateway);
 
     const visibility = gateway.visibility
       ? gateway.visibility.toLowerCase()

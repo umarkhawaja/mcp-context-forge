@@ -9913,6 +9913,21 @@ class="fixed z-40 inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-ce
                         </div>
                       </div>
                     </div>
+                    <div id="edit-gateway-team-container" class="mt-4">
+                      <label
+                        for="edit-gateway-team"
+                        class="block text-sm font-medium text-gray-700 dark:text-gray-400"
+                        >Team</label
+                      >
+                      <select
+                        id="edit-gateway-team"
+                        name="team_id"
+                        class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300"
+                      ></select>
+                      <p id="edit-gateway-team-help" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Only teams you own are listed. Moving to another team requires ownership of that team.
+                      </p>
+                    </div>
 
                     <div>
                       <label class="block text-sm font-medium text-gray-700"
@@ -11228,6 +11243,21 @@ class="fixed z-40 inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-ce
                           >
                         </div>
                       </div>
+                    </div>
+                    <div id="edit-server-team-container" class="mt-4">
+                      <label
+                        for="edit-server-team"
+                        class="block text-sm font-medium text-gray-700 dark:text-gray-400"
+                        >Team</label
+                      >
+                      <select
+                        id="edit-server-team"
+                        name="team_id"
+                        class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-900 dark:text-gray-300"
+                      ></select>
+                      <p id="edit-server-team-help" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Only teams you own are listed. Moving to another team requires ownership of that team.
+                      </p>
                     </div>
                   </div>
                   {% if selected_team_id %}

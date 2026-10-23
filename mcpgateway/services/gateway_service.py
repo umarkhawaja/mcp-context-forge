@@ -3291,9 +3291,17 @@ class GatewayService(BaseService):  # pylint: disable=too-many-instance-attribut
 
                 # Update team assignment if provided, validating ownership
                 if gateway_update.team_id is not None:
-                    if gateway_update.team_id != gateway.team_id:
+                    old_team_id = gateway.team_id
+                    if gateway_update.team_id != old_team_id:
                         _validate_gateway_team_assignment(db, user_email, gateway_update.team_id)
                     gateway.team_id = gateway_update.team_id
+                    # Tools, resources, and prompts carry their own team_id, and visibility is
+                    # checked per item; move the items that inherited the old team with it, or
+                    # the old team keeps access. Per-item team overrides are preserved.
+                    if gateway.team_id != old_team_id:
+                        for item in [*gateway.tools, *gateway.resources, *gateway.prompts]:
+                            if item.team_id == old_team_id:
+                                item.team_id = gateway.team_id
 
                 # Update CA certificate fields if provided
                 if getattr(gateway_update, "ca_certificate", None) is not None:
