@@ -28,6 +28,7 @@ vi.mock("../../../mcpgateway/admin_ui/gateways.js", () => ({ getSelectedGatewayI
 vi.mock("../../../mcpgateway/admin_ui/modals", () => ({ closeModal: vi.fn(), openModal: vi.fn() }));
 vi.mock("../../../mcpgateway/admin_ui/monitoring.js", () => ({ initializeRealTimeMonitoring: vi.fn() }));
 vi.mock("../../../mcpgateway/admin_ui/security.js", () => ({ escapeHtml: vi.fn((s) => s || ""), validateInputName: vi.fn((s) => ({ valid: true, value: s })), validateUrl: vi.fn(() => ({ valid: true })) }));
+vi.mock("../../../mcpgateway/admin_ui/search.js", () => ({ handleTeamSearchEnter: vi.fn() }));
 vi.mock("../../../mcpgateway/admin_ui/servers.js", () => ({
   ensureAddStoreListeners: vi.fn(),
   updateToolMapping: vi.fn(),
@@ -264,6 +265,12 @@ describe("events.js - Keyboard event handling", () => {
     AppState.activeModals = new Set(["test-modal"]);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(closeModal).toHaveBeenCalledWith("test-modal");
+  });
+
+  test("registers the team search Enter handler", async () => {
+    const { handleTeamSearchEnter } = await import("../../../mcpgateway/admin_ui/search.js");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(handleTeamSearchEnter).toHaveBeenCalled();
   });
 
   test("Escape key does nothing when no modals are active", async () => {

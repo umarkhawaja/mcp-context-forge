@@ -33,6 +33,7 @@ import {
   debouncedNonMemberSearch,
   serverSideMemberSearch,
   serverSideNonMemberSearch,
+  handleTeamSearchEnter,
 } from "../../../mcpgateway/admin_ui/search.js";
 import { AppState } from "../../../mcpgateway/admin_ui/appState.js";
 
@@ -1484,5 +1485,112 @@ describe("serverSideNonMemberSearch", () => {
 
     expect(container.innerHTML).toContain("Error searching users");
     consoleSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleTeamSearchEnter
+// ---------------------------------------------------------------------------
+describe("handleTeamSearchEnter", () => {
+  const pressEnter = (input, init = {}) => {
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
+    input.dispatchEvent(event);
+    return event;
+  };
+
+  let form;
+  let submitSpy;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    AppState.memberSearchTimers = {};
+    AppState.nonMemberSearchTimers = {};
+    AppState.nonMemberSelectionsCache = {};
+    window.ROOT_PATH = "";
+    form = document.createElement("form");
+    submitSpy = vi.fn((e) => e.preventDefault());
+    form.addEventListener("submit", submitSpy);
+    document.body.appendChild(form);
+    document.addEventListener("keydown", handleTeamSearchEnter);
+  });
+
+  afterEach(() => {
+    document.removeEventListener("keydown", handleTeamSearchEnter);
+    vi.useRealTimers();
+  });
+
+  const addInput = (id, value) => {
+    const input = document.createElement("input");
+    input.id = id;
+    input.value = value;
+    form.appendChild(input);
+    return input;
+  };
+
+  test("Enter in non-member search runs the search immediately and prevents form submit", async () => {
+    const { fetchWithAuth } = await import("../../../mcpgateway/admin_ui/tokens.js");
+    fetchWithAuth.mockResolvedValue({ ok: true, text: () => Promise.resolve("<div>Users</div>") });
+    const container = document.createElement("div");
+    container.id = "team-non-members-container-team1";
+    document.body.appendChild(container);
+    const input = addInput("non-member-search-team1", "max");
+
+    debouncedNonMemberSearch("team1", "ma", 300);
+    const event = pressEnter(input);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining("search=max"));
+    await vi.runAllTimersAsync();
+    expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+  });
+
+  test("Enter in member search runs the member search immediately", async () => {
+    const { fetchWithAuth } = await import("../../../mcpgateway/admin_ui/tokens.js");
+    fetchWithAuth.mockResolvedValue({ ok: true, text: () => Promise.resolve("<div>Members</div>") });
+    const container = document.createElement("div");
+    container.id = "team-members-container-team1";
+    document.body.appendChild(container);
+    const input = addInput("member-search-team1", "alice");
+
+    const event = pressEnter(input);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining("/admin/teams/team1/members/partial"));
+    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining("search=alice"));
+  });
+
+  test("Enter in add-members user search re-dispatches input and prevents submit", () => {
+    const input = addInput("user-search-team1", "bob");
+    const inputSpy = vi.fn();
+    input.addEventListener("input", inputSpy);
+
+    const event = pressEnter(input);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(inputSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("ignores Enter in unrelated inputs", async () => {
+    const { fetchWithAuth } = await import("../../../mcpgateway/admin_ui/tokens.js");
+    const input = addInput("team-name", "eng");
+
+    const event = pressEnter(input);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(fetchWithAuth).not.toHaveBeenCalled();
+  });
+
+  test("ignores other keys and IME composition", async () => {
+    const { fetchWithAuth } = await import("../../../mcpgateway/admin_ui/tokens.js");
+    const input = addInput("non-member-search-team1", "max");
+
+    const other = new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true });
+    input.dispatchEvent(other);
+    const composing = pressEnter(input, { isComposing: true });
+
+    expect(other.defaultPrevented).toBe(false);
+    expect(composing.defaultPrevented).toBe(false);
+    expect(fetchWithAuth).not.toHaveBeenCalled();
   });
 });

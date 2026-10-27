@@ -965,3 +965,52 @@ export const serverSideNonMemberSearch = async function (teamId, searchTerm) {
       '<div class="text-center py-4 text-red-600">Error searching users</div>';
   }
 }
+
+const TEAM_SEARCH_INPUTS = [
+  {
+    prefix: "member-search-",
+    timers: "memberSearchTimers",
+    search: serverSideMemberSearch,
+  },
+  {
+    prefix: "non-member-search-",
+    timers: "nonMemberSearchTimers",
+    search: serverSideNonMemberSearch,
+  },
+];
+
+/**
+ * Run a team member search on Enter instead of submitting the enclosing form.
+ *
+ * The member and non-member search inputs sit inside the add-member form, so
+ * Enter would otherwise post the form. Enter skips the debounce delay.
+ * @param {KeyboardEvent} event - keydown event from the document
+ * @returns {boolean} - true when the event was a team search Enter
+ */
+export const handleTeamSearchEnter = function (event) {
+  const target = event.target;
+  if (event.key !== "Enter" || event.isComposing || !target?.id) {
+    return false;
+  }
+
+  if (target.id.startsWith("user-search-")) {
+    // The add-members view searches from its own debounced input listeners.
+    event.preventDefault();
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+
+  const input = TEAM_SEARCH_INPUTS.find(({ prefix }) =>
+    target.id.startsWith(prefix)
+  );
+  if (!input) {
+    return false;
+  }
+
+  event.preventDefault();
+  const teamId = target.id.slice(input.prefix.length);
+  clearTimeout(AppState[input.timers][teamId]);
+  delete AppState[input.timers][teamId];
+  input.search(teamId, target.value);
+  return true;
+};

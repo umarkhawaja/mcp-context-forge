@@ -21,6 +21,7 @@ import {
 import { llmModelComboboxSelect } from "./llmModels.js";
 import { closeModal } from "./modals.js";
 import { initializeRealTimeMonitoring } from "./monitoring.js";
+import { handleTeamSearchEnter } from "./search.js";
 import { ensureAddStoreListeners } from "./servers.js";
 import { initializeTagFiltering, updateAvailableTags } from "./tags.js";
 import {
@@ -958,6 +959,9 @@ import {
       }
     }
   });
+
+  // Enter in a team member search runs the search instead of submitting the add-member form
+  document.addEventListener("keydown", handleTeamSearchEnter);
 
   // Keyboard shortcuts for pagination (← / →).
   // Registered once here; the previous per-include <script> block registered
